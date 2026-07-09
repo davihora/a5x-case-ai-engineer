@@ -1,0 +1,62 @@
+name: CI
+
+# Prova publica de "clone -> roda": instala as deps pinadas, roda os specs,
+# executa o pipeline ponta-a-ponta e publica o dashboard gerado como artifact.
+# Deliberadamente minimo: sem matrix, sem lint gate, sem deploy.
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  clone-and-run:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Install deps (uv sync; fallback pip install -r requirements.txt)
+        run: |
+          uv sync --frozen || {
+            echo "::warning::uv sync falhou; fallback para requirements.txt"
+            python -m venv .venv
+            .venv/bin/python -m pip install --upgrade pip
+            .venv/bin/pip install -r requirements.txt
+          }
+
+      - name: Run specs (pytest -q)
+        run: |
+          source .venv/bin/activate
+          pytest -q
+
+      - name: Run pipeline (python run.py)
+        run: |
+          source .venv/bin/activate
+          python run.py
+
+      - name: Assert dashboard.html exists
+        run: |
+          test -f dashboard.html
+          echo "dashboard.html gerado ($(wc -c < dashboard.html) bytes)"
+
+      - name: Upload dashboard artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dashboard-html
+          path: dashboard.html
+          if-no-files-found: error

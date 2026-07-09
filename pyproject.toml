@@ -1,0 +1,12 @@
+[project]
+name = "a5x-case-ai-engineer"
+version = "0.1.0"
+description = "Agente de remediacao autonoma sobre telemetria OpenTelemetry (take-home A5X)"
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+    "duckdb>=1.0",
+    "pytest>=7.0",
+    "pypdf>=4.0",
+    "python-docx>=1.1",
+]

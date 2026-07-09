@@ -1,0 +1,6 @@
+Restricoes de compliance e negocio (A5X)
+1. Servicos de tier RED (Trading Core, Clearing, Risk, Auth, Audit) nunca podem ser
+   remediados automaticamente. Sempre escalar o on-call.
+2. Acoes destrutivas exigem trilha de auditoria (audit log) e, fora de GREEN, um Pull Request.
+3. Durante o pregao, mudancas em servicos RED exigem aprovacao dupla.
+4. Toda acao autonoma deve emitir notificacao e registrar tokens, custo e latencia da decisao.

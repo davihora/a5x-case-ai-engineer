@@ -1,0 +1,19 @@
+# ambientes virtuais
+venv/
+.venv/
+
+# artefatos Python
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# saídas geradas pelo pipeline
+out_action.parquet
+out_decision_trace.parquet
+dashboard.html
+
+# sistema operacional
+.DS_Store
+
+# config local de ferramentas (nao faz parte do deliverable)
+.claude/
