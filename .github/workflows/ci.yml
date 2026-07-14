@@ -44,6 +44,11 @@ jobs:
           source .venv/bin/activate
           pytest -q
 
+      - name: Run evals scorecard (offline, exit 1 se threshold romper)
+        run: |
+          source .venv/bin/activate
+          python -m agent.evals
+
       - name: Run pipeline (python run.py)
         run: |
           source .venv/bin/activate

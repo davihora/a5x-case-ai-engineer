@@ -176,6 +176,66 @@ GROUP BY root_cause_label
 HAVING count(DISTINCT chosen_action) > 1
 ORDER BY root_cause_label
 """)
+    show(con, "Historico vs politica de tiers (acoes que violam allowed_tiers do catalogo)", """
+SELECT CASE WHEN list_contains(a.allowed_tiers, s.tier)
+            THEN 'respeita politica' ELSE 'VIOLA politica' END AS situacao,
+       count(*) AS incidentes,
+       ROUND(100.0 * count(*) / SUM(count(*)) OVER (), 1) AS pct
+FROM incident_log i
+JOIN action_catalog a ON i.chosen_action = a.action_id
+JOIN service_catalog s ON i.service_id = s.service_id
+GROUP BY 1
+ORDER BY 1
+""")
+
+    # ------------------------------------------------------------------ 6. join com LOGs
+    print("\n## 6. O join com LOGs desambiguaria a causa-raiz? (evidencia do corte)")
+    print("A acuracia de acao GREEN e 6/9 porque a query so conhece o sinal, nao a causa.")
+    print("Antes de propor 'join com LOGs' como evolucao, mede-se o que ele daria AQUI.")
+    show(con, "Causa do golden presente em ALGUM log do servico? (por tier)", """
+SELECT g.service_tier, count(*) AS casos,
+       SUM(CASE WHEN EXISTS (
+             SELECT 1 FROM otel_signal l
+             WHERE l.service_id = g.service_id AND l.signal_kind = 'LOG'
+               AND l.attributes.error_type = g.root_cause_label)
+           THEN 1 ELSE 0 END) AS causa_presente_nos_logs
+FROM eval_golden g
+GROUP BY g.service_tier
+ORDER BY g.service_tier
+""")
+    show(con, "GREEN: acao via error_type MODAL dos LOGs (o que o join daria) vs esperado", """
+WITH modal AS (
+  SELECT service_id, attributes.error_type AS error_type,
+         ROW_NUMBER() OVER (PARTITION BY service_id
+                            ORDER BY count(*) DESC, attributes.error_type) AS rn
+  FROM otel_signal WHERE signal_kind = 'LOG'
+  GROUP BY service_id, attributes.error_type
+), causa_acao AS (  -- mapa 1:1 do historico (secao 5): causa -> acao
+  SELECT root_cause_label, MIN(chosen_action) AS acao FROM incident_log GROUP BY 1
+)
+SELECT g.case_id, g.service_id, g.root_cause_label, m.error_type AS log_modal,
+       c.acao AS acao_via_log, g.expected_action,
+       COALESCE(c.acao = g.expected_action, FALSE) AS acerto
+FROM eval_golden g
+LEFT JOIN modal m ON m.service_id = g.service_id AND m.rn = 1
+LEFT JOIN causa_acao c ON c.root_cause_label = m.error_type
+WHERE g.service_tier = 'GREEN'
+ORDER BY g.case_id
+""")
+    show(con, "GREEN: teto com ORACULO de causa-raiz (causa verdadeira -> acao 1:1 do historico)", """
+WITH causa_acao AS (
+  SELECT root_cause_label, MIN(chosen_action) AS acao FROM incident_log GROUP BY 1
+)
+SELECT count(*) AS casos,
+       SUM(CASE WHEN c.acao = g.expected_action THEN 1 ELSE 0 END) AS acertos_oraculo
+FROM eval_golden g
+JOIN causa_acao c USING (root_cause_label)
+WHERE g.service_tier = 'GREEN'
+""")
+    print("\nLeitura: o join modal acerta 2/9 (pior que os 6/9 atuais) — os error_type de LOG")
+    print("deste feed nao correlacionam com a causa do golden (presente em so 3/9 GREEN).")
+    print("Mesmo um oraculo perfeito daria 8/9: gold-19 (ConnectionRefused) espera act-restart,")
+    print("nao o act-failover destrutivo do runbook. Ficar signal-only e decisao MEDIDA.")
 
 
 if __name__ == "__main__":
